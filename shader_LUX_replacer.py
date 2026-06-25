@@ -270,6 +270,19 @@ def _collectVmts():
     return modelPath, vmtList
 
 
+def _addTF2Compatibility(content):
+
+    if re.search(r'\$TF2Compatibility', content, re.IGNORECASE):
+        return content
+
+    pos = content.rfind('}')
+
+    if pos == -1:
+        return content
+
+    return (content[:pos] + '\n\t"$TF2Compatibility" "1"\n' +content[pos:])
+
+
 def _reloadMaterials():
     try:
         from vs import g_pMaterialSystem
@@ -278,7 +291,7 @@ def _reloadMaterials():
         sfm.console('echo [LUX_SHADER_REPLACER] Unable to refresh materials, run in console: `mat_reloadallmaterials')
 
 
-def _applyChanges(changeList):
+def _applyChanges(changeList, addTF2Compat=False):
     """
     changeList: [(absPath, lineIndex, newShader), ...]
     Returns (successCount, errorList)
@@ -290,6 +303,10 @@ def _applyChanges(changeList):
             with open(absPath, 'r') as f:
                 content = f.read()
             newContent = _replaceShaderLine(content, lineIndex, newShader)
+
+            if addTF2Compat:
+                newContent = _addTF2Compatibility(newContent)
+                
             if newContent == content:
                 continue
             with open(absPath, 'w') as f:
@@ -312,7 +329,7 @@ def _showResult(success, skipped, unresolved, errors):
         QtGui.QMessageBox.information(None, 'Done', summary)
 
 
-def _runSilent(vmtList):
+def _runSilent(vmtList): # average user never ends here since the dialog shows by default so i dont update it
     """Prepend LUX_ to every shader header without showing any dialog"""
     changeList = []
     skipped    = 0
@@ -385,6 +402,9 @@ def _runDialog(modelPath, vmtList):
     luxAllCheck.setChecked(False)
     layout.addWidget(luxAllCheck)
     
+    tf2CompatCheck = QtGui.QCheckBox('Add and Enable $TF2Compatibility')
+    layout.addWidget(tf2CompatCheck)
+    
     infoLabel = QtGui.QLabel(
     'NOTE: Current LUX shaders fully supported:<br>'
     '<b>VertexLitGeneric</b> - <b>UnLitGeneric</b>')
@@ -452,7 +472,7 @@ def _runDialog(modelPath, vmtList):
                          if shader is not None and shader.upper().startswith('LUX_'))
         unresolved = sum(1 for _, absPath, __, ___ in entries if absPath is None)
 
-        success, errors = _applyChanges(changeList)
+        success, errors = _applyChanges(changeList, tf2CompatCheck.isChecked())
         _reloadMaterials()
         _showResult(success, skipped, unresolved, errors)
         
