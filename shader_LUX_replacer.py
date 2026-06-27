@@ -316,6 +316,42 @@ def _applyChanges(changeList, addTF2Compat=False):
             errors.append(os.path.basename(absPath) + ': ' + str(e))
     return success, errors
 
+def _undoChanges(targets): # useful for retoids :P - turntwister 25/6/26
+    success = 0
+    errors = []
+
+    tf2Pattern = re.compile(r'^\s*"?\$TF2Compatibility"?\s*"?(?:1)"?\s*\r?\n?', re.IGNORECASE | re.MULTILINE)
+
+    for relPath, absPath in targets:
+        if absPath is None:
+            continue
+
+        try:
+            with open(absPath, 'r') as f:
+                content = f.read()
+
+            newContent = content
+
+            shaderName, lineIndex = _detectShader(newContent)
+
+            if shaderName and shaderName.upper().startswith('LUX_'):
+                originalShader = shaderName[4:]
+                newContent = _replaceShaderLine(newContent, lineIndex, originalShader)
+
+            newContent = tf2Pattern.sub('', newContent)
+
+            if newContent != content:
+                with open(absPath, 'w') as f:
+                    f.write(newContent)
+                success += 1
+
+        except Exception as e:
+            errors.append('%s (%s)' % (relPath, str(e)))
+
+    _reloadMaterials()
+
+    return success, errors
+
 
 def _showResult(success, skipped, unresolved, errors):
     summary  = 'Replaced shader in %d file(s).' % success
@@ -433,12 +469,41 @@ def _runDialog(modelPath, vmtList):
     luxAllCheck.stateChanged.connect(onCheckToggled)
 
     btnLayout = QtGui.QHBoxLayout()
-    btnLayout.addStretch()
+    restoreBtn = QtGui.QPushButton('Restore')
     applyBtn  = QtGui.QPushButton('Apply')
     cancelBtn = QtGui.QPushButton('Cancel')
+
+    btnLayout.addWidget(restoreBtn)
+    btnLayout.addStretch()
     btnLayout.addWidget(applyBtn)
     btnLayout.addWidget(cancelBtn)
+
     layout.addLayout(btnLayout)
+
+    def onRestore():
+        if luxAllCheck.isChecked():
+            targets = vmtList
+        else:
+            selected = set(vmtList_widget.row(i) for i in vmtList_widget.selectedItems())
+            if not selected:
+                QtGui.QMessageBox.warning(dlg, 'No selection', 'Select at least one VMT to restore')
+                return
+            targets = [vmtList[idx] for idx in selected]
+
+        success, errors = _undoChanges(targets)
+        
+        if success > 0:
+            sfm.console('echo [LUX_SHADER_REPLACER] Shader restore completed successfully')
+        else:
+            sfm.console('echo [LUX_SHADER_REPLACER] No files needed restoration')
+
+        # anything could happen so better print if there is the rare case this encounter any errors
+        if errors:
+            sfm.console('echo [LUX_SHADER_REPLACER] Restore encountered errors in some files:')
+            for err in errors[:10]:
+                sfm.console('echo [LUX_SHADER_REPLACER]   %s' % err)
+                
+        dlg.accept()
 
     def onApply():
         if luxAllCheck.isChecked():
@@ -481,6 +546,7 @@ def _runDialog(modelPath, vmtList):
             
         dlg.accept()
 
+    restoreBtn.clicked.connect(onRestore)
     applyBtn.clicked.connect(onApply)
     cancelBtn.clicked.connect(dlg.reject)
     applyBtn.setDefault(True)
