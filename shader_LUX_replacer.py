@@ -100,7 +100,7 @@ def _getSearchPaths():
                 paths.append(candidate)
 
     except Exception as e:
-        sfm.console('echo [LUX_SHADER_REPLACER] _getSearchPaths failed: ' + str(e))
+        sfm.console('echo [LUX_SHADER_PREPENDER] _getSearchPaths failed: ' + str(e))
 
     return paths
 
@@ -129,7 +129,7 @@ def _resolveVmtPath(relPath):
                 return full
 
     except Exception as e:
-        sfm.console('echo [LUX_SHADER_REPLACER] filesystem resolve failed: ' + str(e))
+        sfm.console('echo [LUX_SHADER_PREPENDER] filesystem resolve failed: ' + str(e))
 
     if not _SEARCH_PATHS_READY[0]:
 
@@ -238,7 +238,7 @@ def _collectVmts():
         return modelPath, paths
 
     except Exception as e:
-        sfm.console('echo [LUX_SHADER_REPLACER] StudioHdr failed, falling back to materials node: ' + str(e))
+        sfm.console('echo [LUX_SHADER_PREPENDER] StudioHdr failed, falling back to materials node: ' + str(e))
 
     vmtList = []
 
@@ -265,7 +265,7 @@ def _collectVmts():
                 pass
 
     except Exception as e:
-        sfm.console('echo [LUX_SHADER_REPLACER] Materials node fallback also failed: ' + str(e))
+        sfm.console('echo [LUX_SHADER_PREPEND] Materials node fallback also failed: ' + str(e))
 
     return modelPath, vmtList
 
@@ -288,7 +288,7 @@ def _reloadMaterials():
         from vs import g_pMaterialSystem
         g_pMaterialSystem.UncacheAllMaterials()
     except Exception:
-        sfm.console('echo [LUX_SHADER_REPLACER] Unable to refresh materials, run in console: `mat_reloadallmaterials')
+        sfm.console('echo [LUX_SHADER_PREPENDER] Unable to refresh materials, run in console: `mat_reloadallmaterials')
 
 
 def _applyChanges(changeList, addTF2Compat=False):
@@ -316,7 +316,8 @@ def _applyChanges(changeList, addTF2Compat=False):
             errors.append(os.path.basename(absPath) + ': ' + str(e))
     return success, errors
 
-def _undoChanges(targets): # useful for retoids :P - turntwister 25/6/26
+def _undoChanges(targets): # useful for retoids :P - turntwister
+
     success = 0
     errors = []
 
@@ -354,7 +355,7 @@ def _undoChanges(targets): # useful for retoids :P - turntwister 25/6/26
 
 
 def _showResult(success, skipped, unresolved, errors):
-    summary  = 'Replaced shader in %d file(s).' % success
+    summary  = 'Prepended LUX_ in %d file(s).' % success
     summary += '\nSkipped (already LUX_): %d' % skipped
     if unresolved:
         summary += '\nNot found on disk: %d' % unresolved
@@ -416,7 +417,7 @@ def _runDialog(modelPath, vmtList):
         entries.append((os.path.basename(relPath), absPath, lineIdx, shader))
 
     dlg = QtGui.QDialog()
-    dlg.setWindowTitle('VMT Shader LUX Replace')
+    dlg.setWindowTitle('VMT Shader LUX Prepender')
     dlg.setMinimumWidth(420)
 
     layout = QtGui.QVBoxLayout()
@@ -438,7 +439,7 @@ def _runDialog(modelPath, vmtList):
     luxAllCheck.setChecked(False)
     layout.addWidget(luxAllCheck)
     
-    tf2CompatCheck = QtGui.QCheckBox('Add and Enable $TF2Compatibility')
+    tf2CompatCheck = QtGui.QCheckBox('Add $TF2Compatibility to selected')
     layout.addWidget(tf2CompatCheck)
     
     infoLabel = QtGui.QLabel(
@@ -470,7 +471,7 @@ def _runDialog(modelPath, vmtList):
 
     btnLayout = QtGui.QHBoxLayout()
     restoreBtn = QtGui.QPushButton('Restore')
-    applyBtn  = QtGui.QPushButton('Apply')
+    applyBtn = QtGui.QPushButton('Apply')
     cancelBtn = QtGui.QPushButton('Cancel')
 
     btnLayout.addWidget(restoreBtn)
@@ -493,15 +494,15 @@ def _runDialog(modelPath, vmtList):
         success, errors = _undoChanges(targets)
         
         if success > 0:
-            sfm.console('echo [LUX_SHADER_REPLACER] Shader restore completed successfully')
+            sfm.console('echo [LUX_SHADER_PREPENDER] Shader restore completed successfully')
         else:
-            sfm.console('echo [LUX_SHADER_REPLACER] No files needed restoration')
+            sfm.console('echo [LUX_SHADER_PREPENDER] No files needed restoration')
 
-        # anything could happen so better print if there is the rare case this encounter any errors
+        # anything could happen so better print if there is the rare case this encounter errors
         if errors:
-            sfm.console('echo [LUX_SHADER_REPLACER] Restore encountered errors in some files:')
+            sfm.console('echo [LUX_SHADER_PREPENDER] Restore encountered errors in some files:')
             for err in errors[:10]:
-                sfm.console('echo [LUX_SHADER_REPLACER]   %s' % err)
+                sfm.console('echo [LUX_SHADER_PREPENDER]   %s' % err)
                 
         dlg.accept()
 
@@ -557,7 +558,7 @@ def _runDialog(modelPath, vmtList):
 
 
 def _run():
-    sfm.console('echo [LUX_SHADER_REPLACER] Hello there')
+    sfm.console('echo [LUX_SHADER_PREPENDER] Hello there')
 
     try:
         modelPath, vmtList = _collectVmts()
