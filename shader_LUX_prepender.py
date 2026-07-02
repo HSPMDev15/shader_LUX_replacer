@@ -4,6 +4,9 @@ import re
 from PySide import QtGui
 from PySide import QtCore
 
+UNSUPPORTED_SHADERS = ['PBR','EyeRefract','LightMappedGeneric','CustomHero','Refract','Patch','Sprite','Sky','Teeth','Eyes','Water'] # here goes the unsupported shaders by LUX (PBR for now...)
+UNSUPPORTED_UPPER = [s.upper() for s in UNSUPPORTED_SHADERS]
+
 def skipDialog():
     """change the return to false if you want to see the dialog box"""
     return False
@@ -448,20 +451,56 @@ def _runDialog(modelPath, vmtList):
     
     infoLabel.setWordWrap(False)
     layout.addWidget(infoLabel)
-
     # List widget hidden when luxAllCheck is checked
     vmtList_widget = QtGui.QListWidget()
     vmtList_widget.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+    
     for name, absPath, lineIdx, shader in entries:
         label = name
+        
+        base_shader = ''
+        if shader:
+            base_shader = shader.upper()[4:] if shader.upper().startswith('LUX_') else shader.upper()
+            
+        is_unsupported = (base_shader in UNSUPPORTED_UPPER)
+        
         if shader is not None:
             label = '%s  [%s]' % (name, shader)
+            if is_unsupported:
+                label += ' (not supported)'
         elif absPath is None:
             label = '%s  (not found)' % name
+            
         item = QtGui.QListWidgetItem(label)
+        
+        if is_unsupported:
+            item.setForeground(QtGui.QColor(128, 128, 128)) # if it has unsupported flag i paint it as grey
+            
+        item.setData(QtCore.Qt.UserRole, is_unsupported)
         vmtList_widget.addItem(item)
+        
     vmtList_widget.setVisible(True)
     layout.addWidget(vmtList_widget)
+
+    def onSelectionChanged():
+        has_unsupported = False
+        
+        for item in vmtList_widget.selectedItems():
+            if item.data(QtCore.Qt.UserRole): 
+                has_unsupported = True
+                break
+                
+        if has_unsupported:
+            vmtList_widget.blockSignals(True)
+            for item in vmtList_widget.selectedItems():
+                if item.data(QtCore.Qt.UserRole):
+                    item.setSelected(False)
+            vmtList_widget.blockSignals(False)
+            
+            QtGui.QMessageBox.warning(dlg, 'Shader NOT supported', 
+                'This shader is not supported \n\nNo changes will be applied to it, and it cannot be selected')
+
+    vmtList_widget.itemSelectionChanged.connect(onSelectionChanged)
 
     def onCheckToggled(state):
         vmtList_widget.setVisible(not luxAllCheck.isChecked())
@@ -508,10 +547,18 @@ def _runDialog(modelPath, vmtList):
 
     def onApply():
         if luxAllCheck.isChecked():
-            targets = [(absPath, lineIdx, shader)
-                       for _, absPath, lineIdx, shader in entries
-                       if absPath is not None and lineIdx is not None
-                       and shader is not None and not shader.upper().startswith('LUX_')]
+            targets = []
+            for _, absPath, lineIdx, shader in entries:
+                if absPath is None or lineIdx is None or shader is None:
+                    continue
+                if shader.upper().startswith('LUX_'):
+                    continue
+                    
+                base_shader = shader.upper()
+                if base_shader in UNSUPPORTED_UPPER:
+                    continue
+                    
+                targets.append((absPath, lineIdx, shader))
         else:
             selected = set(vmtList_widget.row(i) for i in vmtList_widget.selectedItems())
             if not selected:
@@ -528,7 +575,7 @@ def _runDialog(modelPath, vmtList):
 
         if not targets:
             QtGui.QMessageBox.information(dlg, 'Nothing to do',
-                'All selected VMTs already use LUX_ or could not be resolved')
+                'All selected VMTs already use LUX_ or are not supported.')
             return
 
         changeList = [(absPath, lineIdx, 'LUX_' + shader)
@@ -543,7 +590,7 @@ def _runDialog(modelPath, vmtList):
         _showResult(success, skipped, unresolved, errors)
         
         if not errors:
-            sfm.console('echo [LUX] Shader replacement completed successfully')
+            sfm.console('echo [LUX_SHADER_PREPENDER] Shader replacement completed successfully')
             
         dlg.accept()
 
@@ -555,7 +602,6 @@ def _runDialog(modelPath, vmtList):
     dlg.setLayout(layout)
     dlg.setModal(True)
     dlg.exec_()
-
 
 def _run():
     sfm.console('echo [LUX_SHADER_PREPENDER] Hello there')
